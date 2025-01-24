@@ -3,6 +3,8 @@ package comptoirs.service;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import comptoirs.entity.Produit;
+import jakarta.validation.ConstraintViolationException;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.validation.annotation.Validated;
@@ -106,8 +108,26 @@ public class CommandeService {
      */
     @Transactional
     public Ligne ajouterLigne(int commandeNum, int produitRef, @Positive int quantite) {
-        // TODO : implémenter cette méthode
-        throw new UnsupportedOperationException("Pas encore implémenté");
+
+        var produit = produitDao.findById(produitRef).orElseThrow();
+        if (produit.isIndisponible()){
+            throw new IllegalStateException();
+        }
+        var commande = commandeDao.findById(commandeNum).orElseThrow();
+        if(commande.getEnvoyeele() != null ){
+            throw new IllegalStateException();
+        }
+        if (produit.getUnitesEnStock() < quantite){
+            throw new IllegalStateException();
+        }
+
+        var nouvelleLigne = new Ligne( commande, produit, quantite );
+        ligneDao.save(nouvelleLigne);
+
+        //on incrémente la quantité commandée
+        produit.setUnitesCommandees( produit.getUnitesCommandees() + 1);
+
+        return nouvelleLigne;
     }
 
     /**
@@ -130,7 +150,16 @@ public class CommandeService {
      */
     @Transactional
     public Commande enregistreExpedition(int commandeNum) {
-        // TODO : implémenter cette méthode
-        throw new UnsupportedOperationException("Pas encore implémenté");
+        var commande = commandeDao.findById(commandeNum).orElseThrow();
+        if(commande.getEnvoyeele() != null ){
+            throw new IllegalStateException();
+        }
+        commande.setEnvoyeele(LocalDate.now());
+
+        for(Ligne l : commande.getLignes() ) {
+            l.getProduit().setUnitesEnStock( l.getProduit().getUnitesEnStock() - l.getQuantite() ); //on décrémente
+            l.getProduit().setUnitesCommandees( l.getProduit().getUnitesCommandees() - l.getQuantite() ); //on décrémente
+        }
+        return commande;
     }
 }
